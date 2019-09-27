@@ -1,0 +1,149 @@
+---
+title: "Mobility Survey"
+author: "Eunho (Colin) Pi"
+runtime: shiny
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r, include=FALSE}
+mypacks <- c("maps","ggplot2","dplyr","tidyverse","readxl","shiny","mapproj","plotly")  # what packages are needed?
+packs <- installed.packages()   # find installed package list
+install.me <- mypacks[!(mypacks %in% packs[,"Package"])]  #what needs to be installed?
+if (length(install.me) >= 1) install.packages(install.me, repos = "http://cran.us.r-project.org")   # install (if needed)
+lapply(mypacks, library, character.only=TRUE)  # load all packages
+```
+
+```{r, echo=FALSE, message=FALSE}
+us_state <- map_data("state")
+us_county <- map_data("county")
+oregon_state <- us_state %>% filter(region == "oregon")
+oregon_county <- us_county %>% filter(region == "oregon")
+
+cnames <- aggregate(cbind(long, lat) ~ subregion, data=oregon_county, 
+                    FUN=function(x)mean(range(x)))
+cnames$subregion = str_to_title(cnames$subregion)
+
+oregon_base <- 
+  ggplot(data = oregon_state, mapping = aes(x = long, y = lat)) + 
+  geom_polygon(aes(group = group), fill = "gray") +
+  theme_bw() +
+  coord_fixed()
+
+oregon_county_zipcode <- 
+  read.csv("uszipsv1.4.csv", colClasses=c("zip"="character")) %>% 
+  filter(state_id == "OR") %>% select(zip, county_name)
+
+survey_data <- read_excel("opportunityatlas survey.xlsx")
+survey_data$`Zip Code` = as.character(survey_data$`Zip Code`)
+
+## change Worse, Unchanged, Unchanged into -1, 0, 1
+survey_data <- survey_data %>% mutate(better_worse = ifelse(`Relative to the children born in the 1980, would you say children growing up in your neighborhood today have a BETTER, WORSE, or UNCHANGED shot at economic success` == "Better", 1, ifelse(`Relative to the children born in the 1980, would you say children growing up in your neighborhood today have a BETTER, WORSE, or UNCHANGED shot at economic success` == "Unchanged", 0,-1)))
+
+survey_county <- left_join(survey_data, oregon_county_zipcode, by = c("Zip Code" = "zip"))
+
+## renamed county_name to subregion
+survey_county <- survey_county %>% rename(subregion = county_name,
+                        jobs = `Transform jobs with low wages, erratic work hours, and/or limited or no benefits into good ones`,
+                        economic_strategy = `Develop inclusive economic strategies that generate middle- and high-wage jobs`,
+                        housing_supply = `Accelerate housing supply to promote affordability and inclusivity`,
+                        social_capita = `Strengthen social capita by tapping the time and expertise of the Boomer generation`,
+                        childhood_edu = `Expand access to high-quality, early childhood education`,
+                        k12 = `Transform K12 education, starting with the budget`,
+                        community_college = `Redesign community colleges, with a focus on completion and programming tied to economic needs`)
+
+survey_county$subregion <- tolower(survey_county$subregion)
+
+k12 <- survey_county %>% group_by(subregion) %>% summarize(k12 = mean(k12))
+
+better_worse <- survey_county %>% group_by(subregion) %>% summarize(better_worse = mean(better_worse, na.rm=TRUE))
+
+final_k12 <- left_join(oregon_county, k12)
+final_better_worse <- left_join(oregon_county, better_worse)
+
+no_theme <- 
+  theme(legend.title=element_blank(),
+        legend.position = "bottom",
+        axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.border = element_blank(),
+        panel.grid = element_blank())
+```
+
+## Better or Worse? {.smaller}
+
+```{r, fig.align='center', echo=FALSE, warning = FALSE}
+p1 <- oregon_base + 
+  geom_polygon(data = final_better_worse, aes(fill = better_worse, group = group, label = subregion), color = "white") +
+  geom_polygon(color = "black", fill = NA) + 
+  no_theme +
+  scale_fill_gradient2(midpoint = 0, low="#F8766D", mid= "#ffe052", high="#00BA38", breaks = -1:1, labels = c("Worse", "Unchanged", "Better")) + 
+  ggtitle("Survey Question 1, Average of the Indicator by County") +
+  labs(fill="") 
+
+ggplotly(p1, tooltip = c("subregion")) %>% config(displayModeBar = F)
+```
+
+Question 1: Relative to the children born in the 1980, would you say children growing up in your neighborhood today have a BETTER, WORSE, or UNCHANGED shot at economic success.
+
+## Factors Considered When Evaluating Change
+
+```{r, fig.align='center'}
+unchanged_data <- survey_data %>% filter(`Relative to the children born in the 1980, would you say children growing up in your neighborhood today have a BETTER, WORSE, or UNCHANGED shot at economic success` == "Unchanged")
+unchanged_data <- as.data.frame(colSums(unchanged_data[,3:8], na.rm=TRUE )/ nrow(unchanged_data[,3:8]) * 100)
+
+better_data <- survey_data %>% filter(`Relative to the children born in the 1980, would you say children growing up in your neighborhood today have a BETTER, WORSE, or UNCHANGED shot at economic success` == "Better")
+better_data <- as.data.frame(colSums(better_data[,3:8], na.rm=TRUE )/ nrow(better_data[,3:8]) * 100)
+
+worse_data <- survey_data %>% filter(`Relative to the children born in the 1980, would you say children growing up in your neighborhood today have a BETTER, WORSE, or UNCHANGED shot at economic success` == "Worse")
+worse_data <- as.data.frame(colSums(worse_data[,3:8], na.rm=TRUE )/ nrow(worse_data[,3:8]) * 100)
+
+factor_data <- data.frame(factors = c("Crime", "School Quality", "Family Structure", "Income Inequality", "Income/Racial Segregation", "Civic Cohesion/Social Capital"), unchanged_data, better_data, worse_data)
+rownames(factor_data) <- NULL
+colnames(factor_data) <- c("Factors", "Unchanged", "Better", "Worse")
+
+gather(factor_data, Key, Percent, -Factors) %>% ggplot(aes(Factors, Percent, fill=Key)) + 
+  geom_bar(stat="identity", position="dodge") + 
+  scale_fill_manual(values=c("#00BA38", "#ffe052", "#F8766D")) + 
+  theme(legend.position="top", axis.text.x = element_text(angle = 50, hjust = 1)) + 
+  labs(fill = "Economic Mobility (Q1)")
+```
+
+## Policy Goals and Economic Mobility {.smaller}
+
+```{r, echo=FALSE}
+inputPanel(
+  column(width = 12, offset = 0,
+  tags$style(type='text/css', ".selectize-input { width: 730px !important; font-size: 15px; } .selectize-dropdown { width: 730px !important; font-size: 15px; }"),
+  selectInput("y", label = "Policy Goals", 
+             choices = c("Transform jobs with low wages, erratic work hours, and/or limited or no benefits into good ones" ="jobs",
+                         "Develop inclusive economic strategies that generate middle- and high-wage jobs" = "economic_strategy",
+                         "Accelerate housing supply to promote affordability and inclusivity" = "housing_supply",
+             "Strengthen social capita by tapping the time and expertise of the Boomer generation" = "social_capita",
+             "Expand access to high-quality, early childhood education" = "childhood_edu",
+             "Transform K12 education, starting with the budget" = "k12",
+             "Redesign community colleges, with a focus on completion and programming tied to economic needs" = "community_college"))
+))
+
+renderPlotly({
+  no_na_survey <- survey_county %>% filter(better_worse %in% c(-1,0,1))
+  p2 <- ggplot(no_na_survey, aes_string(x = input$y)) +
+    geom_density(aes(y = ..density.., fill = `Relative to the children born in the 1980, would you say children growing up in your neighborhood today have a BETTER, WORSE, or UNCHANGED shot at economic success`), alpha = 0.4) +
+    theme(legend.position="bottom") + 
+    ylab("") +
+    xlab("Relative Significance of the Policy Goal (a score ranging from 0-100, in log scale)") +
+    scale_x_log10() +
+    scale_fill_manual(values=c("#00BA38", "#ffe052", "#F8766D")) +
+    labs(fill="Economic Mobility")
+  ggplotly(p2, tooltip = c("")) %>% config(displayModeBar = F)
+})
+```
+
+  

@@ -1,0 +1,256 @@
+install.packages("dplyr")
+install.packages("tidyr")
+install.packages("stringr")
+library(readxl)
+read_excel("/Users/pi/Dropbox (ECONW)/23186 Up For Growth On Call Contract/Analysis/City Job Housing Ratios/Old Files")
+read_excel("/Users/pi/Dropbox (ECONW)/23186 Up For Growth On Call Contract/Analysis/City Job Housing Ratios/Old Files/Final_Dataset_For R.xlsx")
+read.delim("/Users/pi/Dropbox (ECONW)/23186 Up For Growth On Call Contract/Analysis/City Job Housing Ratios/Old Files/Final_Dataset.dta")
+library(tidyverse)
+path_to_data <- "~/Dropbox (ECONW)/23186 Up For Growth On Call Contract/Analysis/City Job Housing Ratios/New Files/Row Data"
+setwd(path_to_data)
+get_city_job_totals <- function(jobs_data_path, state_crosswalk_path) {
+# load both files
+jobs <- read_csv(jobs_data_path)
+crosswalk <- read_csv(state_crosswalk_path)
+# subset and rename datasets
+tidy_jobs <- jobs %>%
+select(w_geocode, C000) %>%
+rename(total_jobs = C000) %>%
+mutate(w_geocode = as.character(w_geocode))
+tidy_crosswalk <- crosswalk %>%
+select(tabblk2010, stplcname) %>%
+rename(w_geocode = tabblk2010,
+city_name = stplcname) %>%
+mutate(w_geocode = as.character(w_geocode))
+# join crosswalk to jobs data
+joined <- left_join(tidy_jobs, tidy_crosswalk)
+# aggregate job totals to city level
+city_job_totals <- joined %>%
+group_by(city_name) %>%
+summarise(total_jobs = sum(total_jobs)) %>%
+ungroup()
+return(city_job_totals)
+}
+get_different_state_results <- function(jobs_data_path, state_crosswalk_path) {
+# map get city job totals across jobs data and crosswalk
+tidy_output <- map2_df(jobs_data_path, state_crosswalk_path, get_city_job_totals)
+# extract state from data
+out_df <- tidy_output %>%
+mutate(state = str_trim(str_extract(city_name, "(?<=,).+$")))
+return(out_df)
+}
+# need to define paths of jobs data and crosswalk data here
+list_of_job_data_paths <- list.files(paste(path_to_data))[seq(1,7,by = 2)]
+list_of_crosswalk_paths <- list.files(paste(path_to_data))[seq(2,8,by = 2)]
+# working example
+output_2015 <- get_different_state_results(list_of_job_data_paths, list_of_crosswalk_paths)
+View(output_2015)
+crosswalk <- "~/Dropbox (ECONW)/23186 Up For Growth On Call Contract/Analysis/City Job Housing Ratios/New Files/Row Data/ca_xwalk.csv"
+View(crosswalk)
+crosswalk <-~/Dropbox (ECONW)/23186 Up For Growth On Call Contract/Analysis/City Job Housing Ratios/New Files/Row Data/ca_xwalk.csv
+crosswalk <-"~/Dropbox (ECONW)/23186 Up For Growth On Call Contract/Analysis/City Job Housing Ratios/New Files/Row Data/ca_xwalk.csv"
+crosswalk <- read.csv("~/Dropbox (ECONW)/23186 Up For Growth On Call Contract/Analysis/City Job Housing Ratios/New Files/Row Data/ca_xwalk.csv")
+crosswalk <- read_\csv("~/Dropbox (ECONW)/23186 Up For Growth On Call Contract/Analysis/City Job Housing Ratios/New Files/Row Data/ca_xwalk.csv")
+crosswalk <- read_csv("~/Dropbox (ECONW)/23186 Up For Growth On Call Contract/Analysis/City Job Housing Ratios/New Files/Row Data/ca_xwalk.csv")
+View(crosswalk)
+jobs <- read_csv("~/Dropbox (ECONW)/23186 Up For Growth On Call Contract/Analysis/City Job Housing Ratios/New Files/Row Data/ca_wac_S000_JT00_2015.csv")
+View(jobs)
+path_to_file <- "/Users/pi/Dropbox (ECONW)/23186 Up For Growth On Call Contract/Analysis/City Job Housing Ratios"
+setwd(path_to_file)
+## load final data, add state variable
+final_data <- read_excel("Old Files/Final_Dataset_For R.xlsx")
+library(readxl)
+library(tidyverse)
+## load final data, add state variable
+final_data <- read_excel("Old Files/Final_Dataset_For R.xlsx")
+View(final_data)
+## load final data, add state variable
+final_data <- read_excel("Old Files/Final_Dataset_For R.xlsx") %>%
+mutate(state = str_trim(str_extract(geography, "(?<=,).+$")))
+library(tidyverse)
+library(readxl)
+path_to_file <- "/Users/pi/Dropbox (ECONW)/23186 Up For Growth On Call Contract/Analysis/City Job Housing Ratios"
+setwd(path_to_file)
+## load final data, add state variable
+final_data <- read_excel("Old Files/Final_Dataset_For R.xlsx") %>%
+mutate(state = str_trim(str_extract(geography, "(?<=,).+$")))
+## load 2015 data, change the variable name in accordance with the final data
+data_2015 <- read.csv("New Files/2015_Data.csv") %>%
+mutate(city_name = as.character(city_name)) %>%
+rename(JOBS2015 = total_jobs) %>% na.omit %>%
+select(-state)
+## join the two data frames, filter the areas of interest (cities from 4 states)
+joined <- left_join(final_data, data_2015, by = c("stplcname" = "city_name")) %>%
+filter(state %in% c("California","Colorado","Oregon","Washington"))
+## get the job growth from 2002-15, 2004-15, and 2010-15
+joined <- joined %>% mutate(job_growth_02to15 = JOBS2015-JOBS2002) %>%
+mutate(job_growth_04to15 = JOBS2015-JOBS2004) %>%
+mutate(job_growth_10to15 = JOBS2015-JOBS2010)
+## get the ratio of job growth to permit growth from 2010-15, 2002-15, 2004-15
+joined <- joined %>% mutate(job_permit_10to15 = job_growth_10to15/permits_10to15) %>%
+mutate(job_permit_02to15 = job_growth_02to15/permits_02to15) %>%
+mutate(job_permit_04to15 = job_growth_04to15/permits_04to15)
+## get the ratio of job growth to housing unit growth from 2010-15
+joined <- joined %>% mutate(job_unit_10to15 = job_growth_10to15/unit_growth_10to15)
+## get the ratio of job growth to population growth from 2010-15
+joined <- joined %>% mutate(job_pop_10to15 = job_growth_10to15/pop_growth_10to15)
+## get housing divide from 2010-15
+joined <- joined %>% mutate(housing_divide_10to15 = job_growth_10to15-unit_growth_10to15)
+write.csv(joined , file = "New Files/2010-2015(All Columns).csv")
+comparision_columns <-
+c("id2", "stplcname", "county_name", "state", "total_pop_10", "total_pop_14","total_pop_15", "pop_growth_10to14", "pop_growth_10to15", "unit_growth_10to14", "unit_growth_10to15", "job_growth_10to14", "job_growth_10to15", "housing_divide_10to14","housing_divide_10to15","permits_10to14","permits_10to15","job_unit_10to14","job_unit_10to15","pop_unit_00to14","pop_unit_00to15", "job_pop_10to14", "job_pop_10to15", "job_permit_10to14", "job_permit_10to15", "permit_unit_10to14", "permit_unit_10to15", "pop_permit_10to14","pop_permit_10to15")
+city_comparision_data_14to15 <-
+joined %>%
+select(selected_columns) %>%
+mutate(county_name = gsub(",.*$", "", county_name)) %>%
+mutate(stplcname = gsub(",.*$", "", stplcname))
+city_comparision_data_14to15 <-
+joined %>%
+select(comparision_columns) %>%
+mutate(county_name = gsub(",.*$", "", county_name)) %>%
+mutate(stplcname = gsub(",.*$", "", stplcname))
+library(tidyverse)
+library(readxl)
+path_to_file <- "/Users/pi/Dropbox (ECONW)/23186 Up For Growth On Call Contract/Analysis/City Job Housing Ratios"
+setwd(path_to_file)
+## load final data, add state variable
+final_data <- read_excel("Old Files/Final_Dataset_For R.xlsx") %>%
+mutate(state = str_trim(str_extract(geography, "(?<=,).+$")))
+## load 2015 data, change the variable name in accordance with the final data
+data_2015 <- read.csv("New Files/2015_Data.csv") %>%
+mutate(city_name = as.character(city_name)) %>%
+rename(JOBS2015 = total_jobs) %>% na.omit %>%
+select(-state)
+## join the two data frames, filter the areas of interest (cities from 4 states)
+joined <- left_join(final_data, data_2015, by = c("stplcname" = "city_name")) %>%
+filter(state %in% c("California","Colorado","Oregon","Washington"))
+## get the job growth from 2002-15, 2004-15, and 2010-15
+joined <- joined %>% mutate(job_growth_02to15 = JOBS2015-JOBS2002) %>%
+mutate(job_growth_04to15 = JOBS2015-JOBS2004) %>%
+mutate(job_growth_10to15 = JOBS2015-JOBS2010)
+## get the ratio of job growth to permit growth from 2010-15, 2002-15, 2004-15
+joined <- joined %>% mutate(job_permit_10to15 = job_growth_10to15/permits_10to15) %>%
+mutate(job_permit_02to15 = job_growth_02to15/permits_02to15) %>%
+mutate(job_permit_04to15 = job_growth_04to15/permits_04to15)
+## get the ratio of job growth to housing unit growth from 2010-15
+joined <- joined %>% mutate(job_unit_10to15 = job_growth_10to15/unit_growth_10to15)
+## get the ratio of job growth to population growth from 2010-15
+joined <- joined %>% mutate(job_pop_10to15 = job_growth_10to15/pop_growth_10to15)
+## get housing divide from 2010-15
+joined <- joined %>%
+mutate(housing_divide_10to15 = job_growth_10to15-unit_growth_10to15) %>%
+mutate(housing_divide_10tp14 = job_growth_10to14-unit_growth_10to14)
+## get the column names from the old file and change 2014 to 2015
+old_file <- read_excel("Old Files/Housing Divide Analysis - Four States.xlsx", skip = 1)
+column_rename <- colnames(old_file)
+column_rename <- gsub("2014","2015", column_rename)
+comparision_columns <-
+c("id2", "stplcname", "county_name", "state", "total_pop_10", "total_pop_14","total_pop_15", "pop_growth_10to14", "pop_growth_10to15", "unit_growth_10to14", "unit_growth_10to15", "job_growth_10to14", "job_growth_10to15", "housing_divide_10to14","housing_divide_10to15","permits_10to14","permits_10to15","job_unit_10to14","job_unit_10to15","pop_unit_00to14","pop_unit_00to15", "job_pop_10to14", "job_pop_10to15", "job_permit_10to14", "job_permit_10to15", "permit_unit_10to14", "permit_unit_10to15", "pop_permit_10to14","pop_permit_10to15")
+city_comparision_data_14to15 <-
+joined %>%
+select(comparision_columns) %>%
+mutate(county_name = gsub(",.*$", "", county_name)) %>%
+mutate(stplcname = gsub(",.*$", "", stplcname))
+colnames(joined)
+## get housing divide from 2010-14 and 2010-15
+joined <- joined %>%
+mutate(housing_divide_10to15 = job_growth_10to15-unit_growth_10to15) %>%
+mutate(housing_divide_10to14 = job_growth_10to14-unit_growth_10to14)
+city_comparision_data_14to15 <-
+joined %>%
+select(comparision_columns) %>%
+mutate(county_name = gsub(",.*$", "", county_name)) %>%
+mutate(stplcname = gsub(",.*$", "", stplcname))
+View(city_comparision_data_14to15)
+## get the column names from the old file and change 2014 to 2015
+old_file <- read_excel("Old Files/Housing Divide Analysis - Four States.xlsx", skip = 1)
+column_rename <- colnames(old_file)
+column_rename <- gsub("2014","2015", column_rename)
+column_rename
+column_comparison_rename <- colnames(old_file)
+column_comparison_rename
+column_rename[6:17]
+write.csv(city_comparision_data_14to15, file = "New Files/2010-2015 with Comparisons (2014 and 2015).csv")
+city_comparision_data_14to15 <-
+joined %>%
+select(comparision_columns) %>%
+mutate(county_name = gsub(",.*$", "", county_name)) %>%
+mutate(stplcname = gsub(",.*$", "", stplcname)) %>% na.rm
+city_comparision_data_14to15 <-
+joined %>%
+select(comparision_columns) %>%
+mutate(county_name = gsub(",.*$", "", county_name)) %>%
+mutate(stplcname = gsub(",.*$", "", stplcname)) %>% na.omit
+write.csv(city_comparision_data_14to15, file = "New Files/2010-2015 with Comparisons (2014 and 2015).csv")
+## select the columns, get rid of state codes from county and city name, and rename the columns
+city_final_data <- joined %>%
+select(selected_columns) %>%
+mutate(county_name = gsub(",.*$", "", county_name)) %>%
+mutate(stplcname = gsub(",.*$", "", stplcname)) %>%
+rename_at(vars(selected_columns), ~ column_rename) %>% na.omit
+write.csv(city_final_data, file = "New Files/2010-2015.csv")
+write.csv(joined , file = "New Files/2010-2015(All Columns).csv")
+## get the column names from the old file and change 2014 to 2015
+old_file <- read_excel("Old Files/Housing Divide Analysis - Four States.xlsx", skip = 1)
+column_rename <- colnames(old_file)
+column_rename <- gsub("2014","2015", column_rename)
+## select the columns of interest
+selected_columns <-
+c("id2", "stplcname", "county_name", "state", "total_pop_10", "total_pop_15", "pop_growth_10to15", "unit_growth_10to15", "job_growth_10to15", "housing_divide_10to15","permits_10to15", "job_unit_10to15", "pop_unit_00to15", "job_pop_10to15", "job_permit_10to15", "permit_unit_10to15", "pop_permit_10to15")
+## select the columns, get rid of state codes from county and city name, and rename the columns
+city_final_data <- joined %>%
+select(selected_columns) %>%
+mutate(county_name = gsub(",.*$", "", county_name)) %>%
+mutate(stplcname = gsub(",.*$", "", stplcname)) %>%
+rename_at(vars(selected_columns), ~ column_rename) %>% na.omit
+write.csv(city_final_data, file = "New Files/2010-2015.csv")
+write.csv(joined , file = "New Files/2010-2015(All Columns).csv")
+## select the columns, get rid of state codes from county and city name, and rename the columns
+city_final_data <- joined %>%
+select(selected_columns) %>%
+mutate(county_name = gsub(",.*$", "", county_name)) %>%
+mutate(stplcname = gsub(",.*$", "", stplcname)) %>%
+rename_at(vars(selected_columns), ~ column_rename) %>% na.omit
+write.csv(city_final_data, file = "New Files/2010-2015.csv")
+## get housing divide from 2010-14 and 2010-15
+joined <- joined %>%
+mutate(housing_divide_10to15 = job_growth_10to15-unit_growth_10to15) %>%
+mutate(housing_divide_10to14 = job_growth_10to14-unit_growth_10to14) %>% na.omit
+write.csv(joined , file = "New Files/2010-2015(All Columns).csv")
+## get housing divide from 2010-14 and 2010-15
+joined <- joined %>%
+mutate(housing_divide_10to15 = job_growth_10to15-unit_growth_10to15) %>%
+mutate(housing_divide_10to14 = job_growth_10to14-unit_growth_10to14)
+write.csv(joined , file = "New Files/2010-2015(All Columns).csv")
+write.csv(joined , file = "New Files/2010-2015(All Columns).csv")
+## load final data, add state variable
+final_data <- read_excel("Old Files/Final_Dataset_For R.xlsx") %>%
+mutate(state = str_trim(str_extract(geography, "(?<=,).+$")))
+## load 2015 data, change the variable name in accordance with the final data
+data_2015 <- read.csv("New Files/2015_Data.csv") %>%
+mutate(city_name = as.character(city_name)) %>%
+rename(JOBS2015 = total_jobs) %>% na.omit %>%
+select(-state)
+## join the two data frames, filter the areas of interest (cities from 4 states)
+joined <- left_join(final_data, data_2015, by = c("stplcname" = "city_name")) %>%
+filter(state %in% c("California","Colorado","Oregon","Washington"))
+## get the job growth from 2002-15, 2004-15, and 2010-15
+joined <- joined %>% mutate(job_growth_02to15 = JOBS2015-JOBS2002) %>%
+mutate(job_growth_04to15 = JOBS2015-JOBS2004) %>%
+mutate(job_growth_10to15 = JOBS2015-JOBS2010)
+## get the ratio of job growth to permit growth from 2010-15, 2002-15, 2004-15
+joined <- joined %>% mutate(job_permit_10to15 = job_growth_10to15/permits_10to15) %>%
+mutate(job_permit_02to15 = job_growth_02to15/permits_02to15) %>%
+mutate(job_permit_04to15 = job_growth_04to15/permits_04to15)
+## get the ratio of job growth to housing unit growth from 2010-15
+joined <- joined %>% mutate(job_unit_10to15 = job_growth_10to15/unit_growth_10to15)
+## get the ratio of job growth to population growth from 2010-15
+joined <- joined %>% mutate(job_pop_10to15 = job_growth_10to15/pop_growth_10to15)
+## get housing divide from 2010-14 and 2010-15
+joined <- joined %>%
+mutate(housing_divide_10to15 = job_growth_10to15-unit_growth_10to15) %>%
+mutate(housing_divide_10to14 = job_growth_10to14-unit_growth_10to14)
+write.csv(joined , file = "New Files/2010-2015(All Columns).csv")
+write.csv(city_final_data, file = "New Files/2010-2015.csv", row.names=FALSE)
+write.csv(joined , file = "New Files/2010-2015(All Columns).csv", row.names=FALSE)
+write.csv(city_comparision_data_14to15, file = "New Files/2010-2015 with Comparisons (2014 and 2015).csv", row.names=FALSE)
